@@ -1,5 +1,5 @@
 ---
-title: "Análise de Cluster - método hierarquico e não hierarquicos"
+title: "Análise de Cluster"
 author: "Jonatha Azevedo"
 output: html_document
 ---
@@ -8,7 +8,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Nesse relatório, encontra-se duas abordagens para algoritmos de agrupamentos, um hirárquico e um não hirárquico. Com a proposta de usar um banco de dados e simular uma clusterização, iremos definir os clusters com base na metodologia definida em sala de aula. E usaremos alguma métrica pra definir se o agrupamento foi feito de uma forma razoável.
+Nesse relatório, encontra-se duas abordagens para algoritmos de agrupamentos, um hierárquico e um não hierárquico. Com a proposta de usar um banco de dados e simular uma clusterização, iremos definir os clusters com base na metodologia definida em sala de aula. E usaremos alguma métrica pra definir se o agrupamento foi feito de uma forma razoável.
 
 
 ### Análise Exploratória dos dados
@@ -107,7 +107,6 @@ Repare que nesse novo conjunto de dados eu tenho uma variável chamada **`grupo`
 Abaixo, a ideia é chegar ao mesmo resultado, só que considerando um método não hierárquico. Utilizando o algoritmo de **K-means**. 
 
 
-
 ### Método não hierárquico
 
 Utilizando o algoritmo já implementado no R, faremos os clusters definindo inicialmente os números da quantidade de centros. 
@@ -122,6 +121,17 @@ O algorítmo de k-means é uma iteração, basicamente, ele consiste em fazer um
 
 Escolhida as sementes iniciais, é calculada a distância de cada elemento em relação às sementes., agrupando o elemento ao grupo que possuir a menor distância e recalculando o centróide do mesmo. O procedimento, naturalmente, é repetido até que todos os elementos facam parte de um dos clusters.
 
+
+Com isso  permitimos que os centróides iniciados aleatoriamente
+se ajustem e melhorem a similaridade intragrupo. Isto é feito minimizando o erro do
+agrupamento, que é definida como a soma das distâncias euclidianas entre cada indivíduo
+e o centróide de seu respectivo grupo, isto é,
+
+$$E = \sum\limits_{K}^{k=1}\sum\limits_{X_{i}\in C_{k}}^{}d(X_{i},y_{k})$$  
+
+
+onde $K$ é o total de grupos definidos, $d(X_{i}, y_{k})$ é a distância entre os indivíduos $X_{i}$ e o centróide $y_{k}$ do cluster $C_{k}$. O método de cálculo da distância também é o euclidiano definido anteriormente.
+
 Faremos para 3 casos: 
 
 ```{r k means}
@@ -129,16 +139,26 @@ kmeans_out1 <- kmeans(dados,centers = 4)
 kmeans_out2 <- kmeans(dados,centers = 5)
 kmeans_out3 <- kmeans(dados,centers = 6)
 sizes <- list(size_4clusters = kmeans_out1$size,size_5clusters = kmeans_out2$size,size_6clusters = kmeans_out3$size);sizes
+dados_clusters_kmeans = cbind(dados,grupo = kmeans_out3$cluster)
+head(dados_clusters_kmeans)
 ```
+
+
 
 Veja abaixo os centroids definidos: 
 
-```{r}
-plot(dados3, col = cl3$cluster)
-points(kmeans_out$centers,pch=19,col=2)
+```{r,message = FALSE,fig.align="center"}
+plot(dados, col = c(1,3,5,4,6,7))
+points(kmeans_out3$centers, col = 1:4, pch = 8)
+sort(kmeans_out3$cluster)
 ```
 
+
+
+
 Como são poucos dados, optar por um número de clusters muito alto não parece nos dar muito ganho. Usamos uma métrica para medir o quão razoável foi a clusterização verificando o balanceamento da distribuição de elementos em cada grupo. Então por isso, vamos escolher 6 centros, como anteiormente. 
+
+
 
 
 
