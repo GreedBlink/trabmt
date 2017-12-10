@@ -15,6 +15,7 @@ bin-release/
 *.apk
 *.html
 *.Rdata
+*.Rhistory
 
 
 # Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
