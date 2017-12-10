@@ -1,0 +1,105 @@
+---
+title: "Análise de Cluster - método hierarquico e não hierarquicos"
+author: "Jonatha Azevedo"
+date: "December 10, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Análise Exploratória dos dados
+```{r dados}
+#Carreganod os dados
+dados <- read.csv2("Dados_Vendas.csv", header=T, stringsAsFactors = F)
+head(dados)
+```
+
+
+Antes de entrar na modelagem de clusters, precisamos conhecer os dados. Temos, para esse trabalho, dados de vendas de vendedores de uma certa loja.
+
+```{r exploratoria1}
+summary(dados)
+```
+
+```{r exporatoria2, message=FALSE,fig.align='center'}
+require(corrplot)
+names(dados) <- names(dados)
+corrplot(cor(dados))
+  
+```
+
+Podemos ver que temos bastantes correlação entre as variáveis. Fato que pode auxiliar na clusterização. Embora, nesse trabalho o processo seja geral e não levando em conta alguma variável para definir melhor os centróides de cada cluster. 
+
+## Análise de cluster
+
+
+Conhecido como "agrupamento", é um conjunto de técnicas que permeite os agrupar elementos de um banco de dados de acordo com suas características, facilitando reconhecer relações e padrões existentes entre os indivíduos de cada grupo ***(*cluster*)**.
+
+Sempre queremos formar cluster que possuem grande homogeniedade dentro de si e grande enterogeneidade entre os cluster, entre os grupos. Então, intuitivamente, queremos obter medidas de similaridades para organizar e distribuir os elementos no banco de dados aos clusters.
+
+Por definições encontradas em artigos, temos as duas abordagens citadas a cima: 
+
+  - **Hierárquica**: se divide nas abordagens aglomerativas ou divisivas;
+  - **Não hierárquica**: baseada no famoso algoritmo de K-means.
+
+A algumas medidas de similaridades, mas largamente mais usada é a de distância. Por representar melhor o conceito de proximidade, entre outras razões. A principal ferramenta nesse caso, é a **matriz de Similaridade (SM)**.
+
+### Método hierárquico
+
+
+```{r k}
+k = 6
+```
+
+Não necessáriamente, precisamos sempre definir o número de clusters para a modelagem. O ideal seria obter esse número de uma forma variante e específica para cada contexto. 
+
+Usando o método euclidiano (o **`R`** com a função **`dist()`**, possui 6 métodos: euclidiano, por máximo, manhattam, camberra, binário e minkowski) para calcular a distância, ou seja: $d(X_{i},X_{j}) = \sqrt{\sum\limits^{p}_{h=1}(X_{hi} - X_{hj})}$, logo a matriz de similaridade, conterá todos os valores $d(X_{i},X_{j})$ o que facilita a identificação dos pares mais similares.
+
+
+```{r matrix de distancia}
+dist <- dist(dados,method = "euclidean" ,diag=T, upper=T)  
+```
+
+```{r, message = FALSE,fig.align='center'}
+clusters <- hclust(dist, "single")
+plot(clusters)
+```
+
+O dendograma anteior não está muito claro para definirmos um número adequado ou razoavel de clusters. Logo, vamos utilizar alguns parâmetros na função **`hclust`**. 
+
+```{r, message = FALSE,fig.align='center'}
+
+dend1.1=hclust(dist(dados, method = "euclidean"),"single") # method - o metodo utilizado (completa, simples, ward...)
+plot(dend1.1)
+rect.hclust(dend1.1, k = 6, border = "blue")
+
+dend1.2=hclust(dist,"complete") # method - o metodo utilizado (completa, simples, ward...)
+plot(dend1.2)
+rect.hclust(dend1.2, k = 6, border = "green")
+
+dend1.3=hclust(dist,"ward.D2") # method - o metodo utilizado (completa, simples, ward...)
+plot(dend1.3)
+rect.hclust(dend1.3, k = 6, border = "red")
+
+```
+
+Precisamos de uma métrica para definir se a clusterização foi razoavel. Talvez olhar para a distribuição de elementos dentro de cada clusters seja uma medida a se considerar. Ou seja, quanto mais equilibrado o número de lementos em cada cluster, quer dizer que a clusterização foi adequada. 
+
+
+Logo o **`hclust`** com método **`"ward.D2"`** (baseado no algoritmo de Ward, o Ward.D2 implementa o critério de elevação ao quadrado das distâncias euclidianas entres os pares de elementos em relação ao centróide), pela métrica citada, parece ser o melhor, mas podemos calcular a dispersão de uma forma:
+
+Primeiro adiciono o indice que refenrica o elemento a seu cluster.
+
+```{r}
+
+dados_clusters <- cbind(dados,cutree(dend1.3,h=6))
+head(dados_clusters)
+```
+
+
+
+### Método não hierárquico
+
