@@ -1,7 +1,6 @@
 ---
 title: "Análise de Cluster - método hierarquico e não hierarquicos"
 author: "Jonatha Azevedo"
-date: "December 10, 2017"
 output: html_document
 ---
 
@@ -9,8 +8,10 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+Nesse relatório, encontra-se duas abordagens para algoritmos de agrupamentos, um hirárquico e um não hirárquico. Com a proposta de usar um banco de dados e simular uma clusterização, iremos definir os clusters com base na metodologia definida em sala de aula. E usaremos alguma métrica pra definir se o agrupamento foi feito de uma forma razoável.
 
-## Análise Exploratória dos dados
+
+### Análise Exploratória dos dados
 ```{r dados}
 #Carreganod os dados
 dados <- read.csv2("Dados_Vendas.csv", header=T, stringsAsFactors = F)
@@ -89,17 +90,55 @@ rect.hclust(dend1.3, k = 6, border = "red")
 Precisamos de uma métrica para definir se a clusterização foi razoavel. Talvez olhar para a distribuição de elementos dentro de cada clusters seja uma medida a se considerar. Ou seja, quanto mais equilibrado o número de lementos em cada cluster, quer dizer que a clusterização foi adequada. 
 
 
-Logo o **`hclust`** com método **`"ward.D2"`** (baseado no algoritmo de Ward, o Ward.D2 implementa o critério de elevação ao quadrado das distâncias euclidianas entres os pares de elementos em relação ao centróide), pela métrica citada, parece ser o melhor, mas podemos calcular a dispersão de uma forma:
+Logo o **`hclust`** com método **`"ward.D2"`** (baseado no algoritmo de Ward, o Ward.D2 implementa o critério de elevação ao quadrado das distâncias euclidianas entres os pares de elementos em relação ao centróide), pela métrica citada, parece ser o melhor.
+
+
 
 Primeiro adiciono o indice que refenrica o elemento a seu cluster.
 
 ```{r}
 
-dados_clusters <- cbind(dados,cutree(dend1.3,h=6))
+dados_clusters <- cbind(dados,grupo=cutree(dend1.3,h=6))
 head(dados_clusters)
 ```
+
+Repare que nesse novo conjunto de dados eu tenho uma variável chamada **`grupo`** ela indica a que grupo (de 1 a 6) cada vendedor percente. Com os grupos e seus elementos definidos, podemos trabalhar e aplicar comparações. 
+
+Abaixo, a ideia é chegar ao mesmo resultado, só que considerando um método não hierárquico. Utilizando o algoritmo de **K-means**. 
 
 
 
 ### Método não hierárquico
+
+Utilizando o algoritmo já implementado no R, faremos os clusters definindo inicialmente os números da quantidade de centros. 
+
+
+O algorítmo de k-means é uma iteração, basicamente, ele consiste em fazer uma escolha inicial dos k elementos que formam as sementes iniciais. Esta escolha pode ser feita da seguinte forma:
+
+  - Selecionado as k primeiras observações
+  - Selecionando k observações aleatorioamente; e
+  - Escolhendo k observações de modo que seus valores sejam bastente diferentes.
+
+
+Escolhida as sementes iniciais, é calculada a distância de cada elemento em relação às sementes., agrupando o elemento ao grupo que possuir a menor distância e recalculando o centróide do mesmo. O procedimento, naturalmente, é repetido até que todos os elementos facam parte de um dos clusters.
+
+Faremos para 3 casos: 
+
+```{r k means}
+kmeans_out1 <- kmeans(dados,centers = 4)
+kmeans_out2 <- kmeans(dados,centers = 5)
+kmeans_out3 <- kmeans(dados,centers = 6)
+sizes <- list(size_4clusters = kmeans_out1$size,size_5clusters = kmeans_out2$size,size_6clusters = kmeans_out3$size);sizes
+```
+
+Veja abaixo os centroids definidos: 
+
+```{r}
+plot(dados3, col = cl3$cluster)
+points(kmeans_out$centers,pch=19,col=2)
+```
+
+Como são poucos dados, optar por um número de clusters muito alto não parece nos dar muito ganho. Usamos uma métrica para medir o quão razoável foi a clusterização verificando o balanceamento da distribuição de elementos em cada grupo. Então por isso, vamos escolher 6 centros, como anteiormente. 
+
+
 
