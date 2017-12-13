@@ -1,188 +1,168 @@
 ---
-title: "Analise Fatorial"
+title: "Análise Fatorial"
 author: "Jonatha Azevedo"
 output: html_document
 ---
 
+![](banner.png)
+
+<br><br>
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-De uma forma geral e superficial, análise fatorial é um conjunto de técnicas estatísticas que nos ajudam a reduzir o número de variáveis iniciais com a menor perda de informação possível. 
+De uma forma geral e superficial, análise fatorial é um conjunto de técnicas estatísticas que nos ajudam a reduzir o número de variáveis iniciais com a menor perda de informação possível. Para essa modelagem, considere um nível de significância estatística de $5\%$.
 
 
-Nesse relatório, faremos uma análise fatorial 
+
 
 
 ```{r dados,message=FALSE}
+require(psych)
+require(corrplot)
 dados <-  read.csv2("Dados.csv",header=T)
 head(dados)
 ```
 
+Nesse relatório, faremos uma análise fatorial, seguindo a seguinte estrutura:
+
+   - Bartlett 
+   - KMO 
+   - Seleção de fatores
+   - Escolha do número de fatores
+      - Variância acumulativa
+      - Screeplot
+      - Análise paralela
+   - Rotação de fatores
+ 
+<br><br>
+
+#### Bartlett
+
+O teste de Barlett é um teste para igualdades de variâncias. Tem como hipótese: 
+
+  - $H_{0}$ A matriz de correlações é uma matriz identidade
+  - $H_{1}$ A matriz de correlações não é uma matriz identidade
+
+
+O teste é sensível em relação a hipótese de normalidade. Se a hipótese de normalidade for rejeitada, devemos buscar outro teste, caso contrário, o teste de Bartlett possui um comportamento melhor do que outros.
+
+
 
 ```{r}
+cor = cor(dados)
+cortest.bartlett(cor, n = nrow(dados))$p.value
+```
 
-########## ANALISE FATORIAL - THAYS MOLINA 
-#A AF ? formada por um conjunto de t?cnicas estat?sticas, e possui como
-#objetivo reduzir o n?mero de vari?veis iniciais com a menor perda poss?vel de
-#informa??o.
+Utilizando o p-valor, rejeitamos a hipótese nula, ou seja, a matriz de correlações não é uma matriz identidade. Logo, podemos aplicar a análise fatorial pra esse conjunto de dados. 
 
-base=read.csv2("Dados.csv",header=T)
-head(base)
+<br><br>
 
-linhas=nrow(base);linhas
-colunas=ncol(base);colunas
+#### KMO (Critério de Kaiser–Meyer–Olkin)
 
-#########################################################################################
-###################### TESTE PARA VERIFICAR SE E POSSIVEL ################################ 
-##################### REALIZAR UMA ANALISE FATORIAL #####################################
-## ######################################################################################
+Se trata de um critério que nos ajuda a verificar se o modelo de análise fatorial que está sendo utilizado é adequadamente ajustado aos dados em questão. O critério é basedado no seguinte cálculo:
 
-#Teste de Bartlett
-#O teste examina a matrix de corela??o
-#interna, e fornece a probabilidade estatistica de que a matrix de correla??es possui correla??es,
-#estatisticamente significativas entre pelo menos uma par de variaveis.
-
-###Hipoteses###
-
-# HO: a matriz de correlacao da populacao ? uma matriz identidade #(modelo fatorial e inapropriado)
-# H1: a matriz de correlacao da populacaoo nao ? uma matriz identidade
+$${\displaystyle KMO={\frac {\displaystyle {\underset {j\neq k}{\sum \sum }}r_{jk}^{2}}{\displaystyle {\underset {j\neq k}{\sum \sum }}r_{jk}^{2}+{\underset {j\neq k}{\sum \sum }}p_{jk}^{2}}}}$$
 
 
+Onde:
 
-##Estatistica de teste
-#Sabendo que:
-#linhas= Tamanho da Amostra
-#colunas =n?mero de variaveis
-#Determinante= determinate da matriz
+$r_{jk}$ é o coeficiente de correlação simples entre as variáveis $X_{j}$ e $X_{k}$;
 
-corr=cor(base);corr
-Deter=det(corr);Deter
-cat("\n qobservado = ",qobs=-((linhas-1)-(2*colunas+5)/6)*log(abs(Deter)),"qTabelado = ",qchisq(0.95,df=colunas*(colunas-1)/2))
+$p_{jk}$ é o coeficiente de correlação parcial entre $X_{j}$ e $X_{k}$, dados os outros $X_{s}$.
 
 
-#Como qobservado =  2590.281 > qTabelado =  73.31149 rejeita-se a hipotese nula
-# ao nivel de significancia de 5%. 
-#Logo o modelo fatorial ? apropriado
-
-#segunda opcao
-install.packages("psych")
-library(psych)
-teste=cortest.bartlett(corr, linhas);teste
-#estatistica de teste
-teste$chisq #qobs 2590.281
-
-#########################KMO#########################################
-
-#Outro metodo para avaliar a adequacidade da analise fatorial
-#O metodo verifica se a matriz de correlacao inversa ? proxima da matriz
-#diagonal,consiste em comparar os valores dos coeficientes de correlacao 
-#linear observados com os valores dos coeficientes de correla??o parcial.
+Portanto, resulta em um índice, sendo uma estatística que indica a proporção da variância dos dados que pode ser considerada comum a todas as variáveis, ou seja, que pode ser atribuída a um fator comum. Valores altos (entre $0,5$ e $1,0$) indicam que a análise fatorial é apropriada, enquanto abaixo de 0,5 indicam que a análise pode ser inadequada.
 
 
-#matriz de correlacao parcial
-
-##pacote rcmrd
-#install.packages("Rcmdr")
-#library("Rcmdr")
-
-#funcao para matriz de correlacao parcial
-
-partial.cor <- function (X, ...)
-{
-  R <- cor(X, ...)
+```{r}
+cor_parcial <- function(dados){
+  R <- cor(dados)
   RI <- solve(R)
   D <- 1/sqrt(diag(RI))
   Rp <- -RI * (D %o% D)
   diag(Rp) <- 0
-  rownames(Rp) <- colnames(Rp) <- colnames(X)
-  Rp
-}
-# matriz de correlacao parcial
-matcorp <- partial.cor(base); matcorp
-
-## Calculando KMO
-
-idiag <- seq(1, by = colunas + 1, length = colunas)
-# somar2 - somatório do quadrado dos elementos da matriz de correlação original fora da diagonal
-somar2 <- sum((as.numeric(corr)[-idiag])^2)
-cat("\n KMO = ",somar2 / (somar2 + sum((as.numeric(matcorp)[-idiag])^2)))
-
-
-#####Tomada de decisao
-#Os valores do Indice KMO que a analise fatorial ? apropriada varia
-#de autor para autor.Para  Hair, Anderson & Tatham (1987) sao valores aceitaveis entre 0,5 a 1,0.
-#portanto abaixo de 0.5 indica que a Analise Fatorial ? inaceitavel.
-#e quanto mais perto de 1 melhor adequac?o de um ajuste.
-
-
-# # KMO =  0.5942236 > 0.5,
-#portanto a analise fatorial e aceitavel.
-
-#### ###################################################
-# #  # EXTRACAO DE FATORES VIA COMPONENTES PRINCIPAIS ##
-#### ###################################################
-
-#correlograma
-
-# Calculando o MMA
-
-for (j in 1:colunas) {
-  somar2j <- sum(matcorp[j, -j]^2)
-  cat("\n MAA", j, "=", somar2j / (somar2j + sum(matcorp[j, -j]^2)))# tem erro 
+  rownames(Rp) <- colnames(Rp) <- colnames(dados)
+  return(Rp)
 }
 
-#autovalores e autovetores
-aut.valor_vetor=eigen(corr);aut.valor_vetor
 
-#componentes
-com_p <- prcomp(base, scale = TRUE)
-summary(com_p)
+matriz_cor_parcial <- cor_parcial(dados)
 
-###Usaremos o criterio da porcentagem da var?ncia explicada - esse criterio est?
-#fundametado na conquista de um percentual cumulativo da variancia total extra?da
-#por fatores sucessivos.O n?mero ? determinado de modo que o conjunto de fatores explique
-#uma porcentagem, minima da variabilidade global de modo que se obtenha a signific?ncia dos
-#fatores.Pode-se estipular um n?vel de explica??o de pelo menos 70% da variabilidade para
-#ter uma explica??o "razo?vel" e de 90% pra obter uma explica??o considerada "otima" do total dos dados.
-
-# O percentual acumulado da variancia, de 1 a 6, 
-#representa 92,1% da vari?ncia total dos dados padronizados
+diagonal <- seq(1, by = ncol(dados) + 1, length.out = ncol(dados))
+soma <- sum((cor(dados)[-diagonal])^2 )
+(kmo <- soma / (soma + sum((matriz_cor_parcial[-diagonal])^2)))
+```
 
 
-#Gr?fico de escarpa para os dados.
-
-plot(1:ncol(base), com_p$sdev^2, type = "b", xlab = "Componente",
-     ylab = "Vari?ncia", pch = 21, cex.axis = 1.5, cex.lab = 1.5)
-
-plot(aut.valor_vetor$values, main = "Screeplot", type = "b", ylab = "Valor Autovalores", xlab = "Numero de autovalores", axes = T) 
-abline(h=1, col=3, lwd=3)
-
-# As componentes principais sao PC1-PC6 
-#A analise fatorial sera baseada em seis fatores, com cargas fatoriais dadas abaixo.
-
-#cargas fatoriais
-
-k <- 6
-carfat <- com_p$rotation[, 1:k] %*% diag(com_p$sdev[1:k])
-colnames(carfat) <- paste("Fator", 1:k, sep = " ")
-carfat
-
-#Com as cargas fatoriais passamos a estimacao das comunalidades e
-#das variancias especificas. 
-
-comum <- rowSums(carfat^2)
-vespec <- diag(matcorp) - comum
-estimat <- cbind(comum, vespec, diag(matcorp))
-rownames(estimat) <- colnames(base)
-colnames(estimat) <- c("Comunalidade", "Variancia unica", "Vari?ncia")
-estimat # estimacao das comunalidades e das variancias especificas
-
-#varimax
-carfatr <- varimax(carfat);carfatr
+Concluímos que, com o KMO aproximadamente igual a $0.594$ a análise fatorial é adequada, podemos prosseguir.
 
 
+#### Fatores via componentes principais
+
+##### Variância Acumulada
+
+```{r,message=FALSE,fig.align='center'}
+KMO(dados) # MAA = MSA
+
+valores_vetores <- eigen(cor(dados))
+
+componentes <- prcomp(dados, scale. = TRUE)
+summary(componentes) 
 
 ```
 
+Mais de 90% da proporção da variância acumulada até PC6
+
+
+```{r,message=FALSE,fig.align='center'}
+
+plot(1:ncol(dados), (componentes$sdev)^2, type = "b", xlab = "Componentes", 
+     ylab = "Variância", pch = 20, cex.axis = 1.3, cex.lab = 1.3)
+
+plot(valores_vetores$values, type = "b", ylab = "Autovalores", main = "Screeplot",
+     xlab = "Número de autovalores", pch = 20, axes = F) 
+axis(2)
+axis(1,at = 1:length(valores_vetores$values))
+
+abline(h=1, col=2, lwd=2)
+```
+
+
+Pelo *Screeplot*,  parece ser melhor escolher até PC5. Porém, escolhendo o critério da variância acumulada, vamos definir 6 componentes principais. 
+
+
+```{r}
+acp <- 6
+
+cargas <- componentes$rotation[, 1:acp] %*% 
+  diag(componentes$sdev[1:acp])
+colnames(cargas) <- paste("Fator", 1:acp)
+cargas
+```
+
+```{r}
+comum <- rowSums(cargas^2)
+vespec <- diag(matriz_cor_parcial) - comum
+estimat <- cbind(comum, vespec, diag(matriz_cor_parcial))
+rownames(estimat) <- colnames(dados)
+colnames(estimat) <- c("Comunalidade", "Variância unica", "Variância")
+```
+
+Estimacao das comunalidades e das variancias especificas
+
+```{r}
+estimat
+```
+
+
+#### Rotação dos fatores
+
+
+
+```{r}
+varimax(cargas)
+```
+
+  
 

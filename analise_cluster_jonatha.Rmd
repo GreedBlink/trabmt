@@ -4,6 +4,11 @@ author: "Jonatha Azevedo"
 output: html_document
 ---
 
+![](banner.png)
+
+<br><br>
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
