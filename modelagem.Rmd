@@ -1,0 +1,345 @@
+---
+title: "Modelagem - MD"
+author: "Jonatha Azevedo, Leonardo Filgueira, George Amarante, Michelle e Rafael"
+date: ''
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+![](banner.png)   
+
+
+A proposta dessa modelagem é aplicar conhecimentos e técnicas em modelos lineares obtidos no curso. A modelagem será feita com um banco de dados que contém informações, entre 2010 à 2016, sobre os municípios do estado de São paulo. Após a modelagem, tentaremos criar métricas de redução de óbtos nas estradas do estado. 
+
+
+A modelagem será feita em duas partes: 
+
+  - Análise de cluster (iremos agrupar os municípios)
+  - Regressão linear múltipla e tratamento dos resíduos
+
+
+<br><br>
+
+#### Análise de cluster
+
+No banco de dados, não temos nenhuma variável que seja contextualizada para nosso problema, ou seja, não temos variáveis que remetem a óbtos, acidentes em rodovias, boletins de ocorrência e etc. a ideia da clusterização é nos ajudar a criar uma variável proxy que, de alguma forma, nos indique uma medida de acidentes em estradas. 
+
+
+<br><br>
+
+##### Metodologia utilizada na abordagem
+
+Como esse é um relatório, não explicitaremos a metodologia. Porém, para mais detalhes, há o trabalho em **PDF**. 
+
+
+
+```{r,message = FALSE}
+#carregando pacotes necessaios 
+require(corrplot)
+require(normtest)
+require(dplyr)
+
+set.seed(6)
+
+city_dataset<-read.csv2('city_dataset.csv')
+city_dataset <- na.omit(city_dataset)
+names(city_dataset)[1] = "cidade"
+head(city_dataset)
+```
+
+
+Algumas variáveis, como os grupos de jovens, foram transformadas. Além disso, criamos a densidade de veículos e o PIB *percapito* para cada município. 
+
+
+```{r novas variaveis, message=FALSE}
+pibpercapita <-city_dataset$pib/city_dataset$populacao
+dens_vei     <-city_dataset$veiculos/city_dataset$rodovia
+pop1519p     <-city_dataset$pop1519/city_dataset$populacao
+pop2024p     <-city_dataset$pop2024/city_dataset$populacao
+pop2529p     <-city_dataset$pop2529/city_dataset$populacao
+
+
+base<-data.frame(cbind(pibpercapita,pop1519p,pop2024p,pop2529p,city_dataset$pjovem,city_dataset$pop60p,city_dataset$pmotos,city_dataset$pmat,dens_vei))
+```
+
+Depois de incorporar as transformações no bando de dados, podemos fazer a clusterização. Chegamos a uma inferência subjetiva de que teríamos  mais chances de ter um óbto em um acidente de trânsito envolvendo motos e jovens. Essa é uma informação útil para o agrupamento. 
+
+Usaremos um método não hierárquico, o algoritmo de k-means, para a clusterização. Os métodos de agrupamentos se baseam em distâncias. 
+
+Basicamente, o modelo de Kmeans consiste em fazer uma escolha inicial dos k elementos que formam as sementes iniciais. Esta escolha pode ser feita da seguinte forma:
+
+  - Selecionado as k primeiras observações;
+  - Selecionando k observações aleatorioamente; e
+  - Escolhendo k observações de modo que seus valores sejam bastente diferentes.
+  
+  
+Escolhida as sementes iniciais, é calculada a distância de cada elemento em relação às sementes, agrupando o elemento ao grupo que possuir a menor distância e recalculando o centróide do mesmo. O procedimento, naturalmente, é repetido até que todos os elementos façam parte de um dos clusters.
+
+
+
+
+
+```{r,fig.align='center',message=FALSE}
+names(base)[c(5:8)]<-c('pop60p','pjovem','pmotos','pmat')
+omega<-cor(base,use = 'complete.obs')
+
+corrplot(omega)
+
+corrplot(omega, method = "color", cl.pos = "b", type = "lower", addgrid.col = "white",
+         addCoef.col = "white", tl.col = "black", tl.cex = 0.7, number.cex = 0.7, cl.cex = 0.7)
+
+  base = cbind(base,cidade =city_dataset$cidade,ano = city_dataset$ano)
+
+base<-data.frame(cbind(pibpercapita,pop1519p,pop2024p,pop2529p,city_dataset$pjovem,city_dataset$pop60p, city_dataset$pmotos,city_dataset$pmat,dens_vei))
+names(base)[c(5:8)]<-c('pop60p','pjovem','pmotos','pmat')
+
+```
+
+
+Criando os clusters com a função: 
+
+
+```{r,message=FALSE}
+kmeans_out<-kmeans(na.omit(base[,c('pjovem','pmotos','pop60p')]),centers = 6)
+kmeans_out$size
+```
+
+Introduzindo os grupos definidos anteriormente no banco de dados:
+
+```{r}
+membros <- kmeans_out$cluster
+base<-base[rowSums(is.na(base[,c('pjovem','pmotos','pmat')]))==0,]
+city_dataset_cluster <- cbind(base,grupos = membros)
+head(city_dataset_cluster)
+```
+
+A *proxy* será uma média ponderada entre as variáveis que usamos para a criação dos centróides, ou seja, 
+
+$$k_{proxy} = peso_{motos}pmotos + peso_{jovens}pjovens + peso_{pop60p}pop60p$$
+
+onde $pmotos$, $pjovens$ e $pop60p$ são, respectivamente, a proporção de motos nos municípios, a proporção de jovens e a número de pessoas com mais de 60 anos na população.
+
+
+```{r,message = FALSE, fig.align="center"}
+ind_acidente<-rowSums(kmeans_out$centers)
+city_dataset_cluster<-cbind(city_dataset_cluster,NA)
+names(city_dataset_cluster)[dim(city_dataset_cluster)[2]]<-'ind_acidente'
+
+for(i in 1:10){
+  city_dataset_cluster[city_dataset_cluster$membros==i,'ind_acidente']<-ind_acidente[i]
+}
+plot(city_dataset_cluster$pjovem,city_dataset_cluster$pmotos,xlab="Porporção de jovens", ylab="Proporção de motos")
+points(kmeans_out$centers,pch=19,col=2)
+
+```
+
+Agora, de fato, criremos os pesos e a variável proxy ***"proxy_id_acidentes"***.
+
+```{r, message = FALSE}
+pesos<-kmeans_out$centers/ind_acidente;pesos
+aux = as.data.frame(pesos)
+
+proxy_ind_acidente = rep(0,times = nrow(city_dataset_cluster))
+dataset_final <- cbind(city_dataset_cluster,proxy_ind_acidente = proxy_ind_acidente)
+
+for( i in 1:nrow(city_dataset_cluster)){
+  if(city_dataset_cluster$grupo[i]  == 1){
+    dataset_final$proxy_ind_acidente[i] = aux$pmotos[1]*dataset_final$pmotos[i] + aux$pjovem[1]*dataset_final$pjovem[i] + aux$pop60p[1]*dataset_final$pop60p[i]
+  }else if(city_dataset_cluster$grupo[i]  == 2){
+    dataset_final$proxy_ind_acidente[i] = aux$pmotos[2]*dataset_final$pmotos[i] + aux$pjovem[2]*dataset_final$pjovem[i] + aux$pop60p[2]*dataset_final$pop60p[i]
+  }else if(city_dataset_cluster$grupo[i]  == 3){
+    dataset_final$proxy_ind_acidente[i] = aux$pmotos[3]*dataset_final$pmotos[i] + aux$pjovem[3]*dataset_final$pjovem[i] + aux$pop60p[3]*dataset_final$pop60p[i]
+  }else{
+    dataset_final$proxy_ind_acidente[i] = aux$pmotos[4]*dataset_final$pmotos[i] + aux$pjovem[4]*dataset_final$pjovem[i] + aux$pop60p[4]*dataset_final$pop60p[i]
+  }  
+}
+```
+
+Em estatística, uma *proxy* (ou variável proxy) é uma variável que não é diretamente relevante por si só, mas atua no lugar de uma variável não observável ou não mensurável para descobrir um resultado provável.
+
+Para que a variável em questão seja uma boa proxy, é preciso que haja uma forte correlação, não necessariamente linear, com a variável que se busca analisar. Essa correlação pode ser tanto positiva quanto negativa.
+
+Com a proxy criada, vamos criar um modelo linear pra verificar quais variáveis explicam a nossa proxy. 
+
+```{r}
+modelo <-  lm(formula = proxy_ind_acidente~pibpercapita+pmat+dens_vei,data = dataset_final)
+summary(modelo)
+```
+
+Temos que as variáveis PIB percapto, quantidade de jovens matriculados no ensino médio e a densidade de veículos são estatisticamente significantes para a proxy. Tirando, claro, as variáveis que foram usadas para definir o processo gerador. 
+
+
+#### Qualidade do ajuste
+
+
+Temos que olhar os resíduos para verificar se nosso modelo é adequado, ou pelo menos, razoável.
+
+```{r,message=FALSE,fig.align='center'}
+plot(modelo$residuals,pch=20)
+abline(h=0,col=2)
+```
+
+
+Verificando normalidade dos resíduos com o `shapiro.test()`, temos :
+```{r}
+shapiro.test(modelo$residuals)
+```
+
+```{r,message=FALSE,fig.align="center"}
+normalizando = (modelo$residuals - mean(modelo$residuals))/sd(modelo$residuals)
+qqnorm(normalizando)
+abline(c(0,1),col=2)
+```
+
+
+Ou seja, pelo p-valor < 2.2e-16, rejeitamos a hipótese de que os resíduos seguem uma distribuição normal. Precisamos melhorar isso. A função `boxcox` nos ajuda a obter uma transformação dos dados, tranformação essa que pode nos ajudar a obter algumas propriedades desejadas nos resíduos. 
+
+```{r,message=FALSE,fig.align='center'}
+require(MASS)
+a = MASS::boxcox(modelo)
+lambda <- a$x[which.max(a$y)];lambda
+```
+
+
+Iremos usar o varlor de $\lambda$ que maximiza y com a fórmula proposta por Box e Cox, da seguinte forma:
+
+$$y(\lambda) = \left\{\begin{matrix}
+ \frac{(Y + \lambda_{1})^{\lambda_{1}}-1}{\lambda_{1}},& \mbox{se} &  \lambda \neq 0;\\
+ log(y + \lambda_{2}),& \mbox{se} & \lambda = 0
+\end{matrix}\right.$$
+
+
+Com isso, temos:
+
+```{r}
+dataset_t = as.data.frame(matrix(rep(0,times = length(dataset_final)),nrow = nrow(dataset_final),ncol=ncol(dataset_final)))
+names(dataset_t) = names(dataset_final)
+for(i in 1:nrow(dataset_final)){
+  for(j in 1:ncol(dataset_final)){
+    aux = (((dataset_final[i,j] +lambda)^lambda)-1)/lambda
+    dataset_t[i,j] = aux
+  }
+}
+
+# dataset_t = log(dataset_final)
+head(dataset_t)
+```
+
+Logo, aplicamos novamente a regressão linear múltipla: 
+
+```{r}
+modelo2 <-  lm(formula = proxy_ind_acidente~pibpercapita+pmat+dens_vei,data = dataset_t)
+summary(modelo2)
+modelo2 <-  lm(formula = proxy_ind_acidente~pibpercapita+dens_vei,data = dataset_t)
+summary(modelo2)
+```
+
+
+Rodando separadamente regressões lineares simples:
+
+```{r}
+aux1 <- lm(formula =proxy_ind_acidente ~ pibpercapita ,data = dataset_t )
+summary(aux1)
+aux2 <- lm(formula =proxy_ind_acidente ~ dens_vei ,data = dataset_t )
+summary(aux2)
+aux3 <- lm(formula =proxy_ind_acidente ~ pmat ,data = dataset_t )
+summary(aux3)
+```
+
+
+Plotando os resíduos com os dados transformados, temos:
+
+```{r,message=FALSE,fig.align="center"}
+normalizando2 = (modelo2$residuals - mean(modelo2$residuals))/sd(modelo2$residuals)
+qqnorm(normalizando2)
+abline(c(0,1),col=2)
+```
+
+```{r}
+shapiro.test(modelo2$residuals)
+```
+
+
+
+Verificando a transformação com log. 
+```{r}
+dataset_t_log = log(dataset_final)
+```
+
+
+Logo, aplicamos novamente a regressão linear múltipla: 
+
+```{r}
+modelo3 <-  lm(formula = proxy_ind_acidente~pibpercapita+pmat+dens_vei,data = dataset_t_log)
+summary(modelo3)
+```
+
+Plotando os resíduos com os dados transformados, temos
+
+```{r,message=FALSE,fig.align="center"}
+normalizando3 = (modelo3$residuals - mean(modelo3$residuals))/sd(modelo3$residuals)
+qqnorm(normalizando3)
+abline(c(0,1),col=2)
+```
+
+Verificando normalidade desse novo modelo, temos
+
+```{r}
+shapiro.test(modelo3$residuals)
+```
+
+
+É notável que a primeira transformação é melhor se olharmos a calda superior do qqplot dos resíduos, mas ela não dá conta da outra "calda". Podemos aplicar novamente o teste de transformação, boxcox, e verificar se conseguimos resolver esse problema.
+
+Ao fazer o boxplot da proxy transformada, podemos perceber que há alguns outliers:
+
+```{r}
+boxplot(dataset_t_log$proxy_ind_acidente)
+```
+
+Iremos retirar estes outliers do conjunto de dados:
+
+```{r, fig.show="hide", warning=F}
+obs <- boxplot(dataset_t_log$proxy_ind_acidente)
+out <- obs$out
+
+dataset_t_log <- dataset_t_log %>% filter(!(proxy_ind_acidente %in% out))
+```
+
+Aplicamos mais uma vez a regressão linear múltipla: 
+
+```{r}
+modelo4 <-  lm(formula = proxy_ind_acidente~pibpercapita+pmat+dens_vei,data = dataset_t_log)
+summary(modelo4)
+```
+
+Plotando os resíduos com os dados transformados sem outliers, temos
+
+```{r,message=FALSE,fig.align="center"}
+normalizando4 = (modelo4$residuals - mean(modelo4$residuals))/sd(modelo4$residuals)
+qqnorm(normalizando4)
+abline(c(0,1),col=2)
+```
+
+Verificando normalidade desse novo modelo, temos
+
+```{r}
+shapiro.test(modelo4$residuals)
+```
+
+
+....
+
+Gráficos de dispersões:
+
+
+```{r,message = FALSE, fig.align='center'}
+plot( dataset_final$proxy_ind_acidente~dataset_final$pibpercapita,cex=1.1)
+plot( dataset_final$proxy_ind_acidente~dataset_final$dens_vei,cex=1.1)
+plot( dataset_final$proxy_ind_acidente~dataset_final$pmat,cex=1.1)
+```
